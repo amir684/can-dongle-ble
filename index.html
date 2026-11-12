@@ -135,7 +135,7 @@ textarea{width:100%;background:#0b0d11;color:var(--fg);border:1px solid #2a303c;
 .leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:8px}.leg b{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:5px;vertical-align:-1px}
 </style></head><body>
 <header><div class="top"><h1>CAN TEST</h1><span id="trp" class="pill hide"></span><span id="mode" class="pill"></span><span id="bus" class="pill"></span><span id="hz" class="pill"></span></div>
-<nav><button data-t="live" class="on">חי</button><button data-t="bat">סוללה</button><button data-t="eng">מנוע</button><button data-t="hyb">היברידי</button><button data-t="chart">גרף זרם</button><button data-t="term">טרמינל</button><button data-t="trips">נסיעות</button><button data-t="sniff">Sniffer</button><button data-t="scan">סריקה</button></nav></header>
+<nav><button data-t="live" class="on">חי</button><button data-t="bat">סוללה</button><button data-t="eng">מנוע</button><button data-t="hyb">היברידי</button><button data-t="term">טרמינל</button><button data-t="trips">נסיעות</button><button data-t="sniff">Sniffer</button><button data-t="scan">סריקה</button></nav></header>
 <main>
 <div id="t-live" class="tab">
  <section id="lo" class="hide"><h2>מצב האזנה בלבד</h2><p class="hint">הדונגל לא משדר כלום לבאס. ודא שהחיבור תקין (בלשונית Sniffer – האם מגיעה תנועה, ושאין שגיאות באס), ואז עבור למצב רגיל כדי לשאול את הרכב.</p>
@@ -192,7 +192,6 @@ textarea{width:100%;background:#0b0d11;color:var(--fg);border:1px solid #2a303c;
  <section><h2>כל הנתונים</h2><table id="ht"></table></section>
  <p class="hint">הנתונים נקראים ממחשב ההיברידי (747) רק כשהלשונית הזו פתוחה. MG1 הוא הגנרטור (מתניע את המנוע וטוען), MG2 הוא מנוע ההנעה (מניע את הגלגלים ובולם רגנרטיבית). ? = הנוסחה עוד לא אומתה מול הרכב.</p>
 </div>
-<div id="t-chart" class="tab hide"><section><div id="fc" class="ch"></div><p class="hint">20 השניות האחרונות, כל קריאה של הזרם (ללא החלקה). גרירה = זום, לחיצה כפולה = חזרה.</p></section></div>
 <div id="t-term" class="tab hide"><section><h2>טרמינל CAN</h2>
  <p class="hint">כתובת בקר ובקשה בהקסה, למשל <b>7D2 221F9A</b> (זרם ומתח), <b>7DF 010D</b> (מהירות, לכל הבקרים), <b>747 221814</b> (טמפ' סוללה). התשובה מוצגת עם כתובת הבקר שענה.</p>
  <div class="row"><input id="tx" value="7D2" size="4"><input id="td" value="221F9A" size="14"><button id="bsend">שלח</button></div>
@@ -218,13 +217,13 @@ const $=id=>document.getElementById(id),num=(v,d=1)=>v==null||isNaN(v)?'—':(+v
 const tr=(c,h)=>'<tr>'+c.map(x=>h?`<th>${x}</th>`:`<td>${x}</td>`).join('')+'</tr>';
 async function api(u){try{return await (await fetch(u)).json()}catch(e){return null}}
 let tab='live',busy=false,seq=0,X=[],Y=[],C=null,lastSniff=0;
-function show(t){tab=t;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==t));['live','bat','eng','hyb','chart','term','trips','sniff','scan'].forEach(k=>$('t-'+k).classList.toggle('hide',k!=t));
+function show(t){tab=t;document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t==t));['live','bat','eng','hyb','term','trips','sniff','scan'].forEach(k=>$('t-'+k).classList.toggle('hide',k!=t));
  if(t=='chart'&&!C){C=new uPlot({width:$('fc').clientWidth,height:300,title:'זרם סוללה (A, + = טעינה)',scales:{x:{time:false}},cursor:{drag:{x:true,y:false}},
   axes:[{stroke:'#8a91a3',grid:{stroke:'#222833'},values:(u,v)=>v.map(s=>s.toFixed(0)+'s')},{stroke:'#8a91a3',grid:{stroke:'#222833'},label:'A'}],
   series:[{label:'שניות'},{label:'A',stroke:'#3ea6ff',width:1.5,points:{show:false}}]},[[],[]],$('fc'))}
  if(t=='sniff')sniff();if(t=='scan')scan();if(t=='trips')trips();if(t=='bat')bat();if(t=='eng')eng();if(t=='hyb')hyb()}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
-window.addEventListener('resize',()=>{if(C)C.setSize({width:$('fc').clientWidth,height:300})});
+
 $('bnorm').onclick=async()=>{if(confirm('לעבור למצב רגיל? הדונגל ישלח לרכב בקשות קריאה (כמו ELM327).'))await api('/api/mode?listen=0')};
 $('blisten').onclick=()=>api('/api/mode?listen=1');
 $('btest').onclick=()=>api('/api/selftest');
@@ -463,5 +462,5 @@ async function hyb(){if(tab!='hyb')return;const r=await api('/api/hybrid');if(!r
 setInterval(()=>{if(tab=='hyb')hyb()},500);
 window.addEventListener('resize',()=>{const w=$('hc1').clientWidth;if(HC1)HC1.setSize({width:w,height:200});if(HC2)HC2.setSize({width:w,height:200})});
 setInterval(()=>{if(tab=='trips')trips()},5000);
-setInterval(tick,700);setInterval(samples,200);setInterval(()=>{if(tab=='sniff')sniff();if(tab=='scan')scan();if(tab=='bat')bat()},1000);tick();
+setInterval(tick,700);setInterval(()=>{if(tab=='sniff')sniff();if(tab=='scan')scan();if(tab=='bat')bat()},1000);tick();
 </script></body></html>
