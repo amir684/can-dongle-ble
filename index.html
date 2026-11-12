@@ -7,7 +7,7 @@
 (function(){
 const SVC='6e1c0001-7a3d-4c6b-9b52-2f1e0ca0d001',REQ='6e1c0002-7a3d-4c6b-9b52-2f1e0ca0d001',RSP='6e1c0003-7a3d-4c6b-9b52-2f1e0ca0d001';
 const realFetch=window.fetch.bind(window),enc=new TextEncoder(),dec=new TextDecoder();
-let dev=null,req=null,up=false,waiters=[],queue=[],cur=null,nextId=1,stats={ok:0,fail:0,bytes:0};
+let dev=null,req=null,up=false,waiters=[],queue=[],cur=null,nextId=1,stats={ok:0,fail:0,bytes:0,why:''};
 const ui={};
 function setState(t,cls){if(ui.s){ui.s.textContent=t;ui.s.className='bles '+(cls||'')}if(ui.o)ui.o.style.display=up?'none':'flex';if(ui.b)ui.b.disabled=false}
 function ready(){return up?Promise.resolve():new Promise(r=>waiters.push(r))}
@@ -32,11 +32,12 @@ async function pump(){
  if(cur||!queue.length)return;
  await ready();if(cur||!queue.length)return;
  cur=queue.shift();cur.id=nextId;nextId=nextId%255+1;cur.touch=Date.now();
- cur.timer=setInterval(()=>{if(cur&&Date.now()-cur.touch>8000)finish(false)},1000);
+ cur.timer=setInterval(()=>{if(cur&&Date.now()-cur.touch>8000){stats.why='timeout '+cur.path.split('?')[0]+(cur.parts?' (partial)':'');finish(false)}},1000);
  const p=enc.encode(cur.path),m=new Uint8Array(p.length+1);m[0]=cur.id;m.set(p,1);
- try{await req.writeValueWithResponse(m)}catch(e){finish(false)}
+ try{await req.writeValueWithResponse(m)}catch(e){stats.why='write: '+(e.message||e);finish(false)}
 }
 function bleFetch(path){
+ if(path==='/api/status')path='/api/status?log=12';  //the full log is 5 KB, every 0.7 s
  let q=queue.find(x=>x.path===path);
  if(!q){q={path,res:[],rej:[]};queue.push(q)}
  const pr=new Promise((res,rej)=>{q.res.push(res);q.rej.push(rej)}).then(r=>r.clone());
@@ -94,7 +95,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const bar=document.createElement('div');bar.id='blebar';bar.innerHTML='<span class="bles" id="blest2"></span>';document.body.appendChild(bar);
  ui.o=o;ui.b=o.querySelector('#bleb');ui.s=o.querySelector('#blest');
  const s2=bar.querySelector('#blest2');
- setInterval(()=>{s2.textContent=up?'BLE ✓ '+stats.ok+' / ✗ '+stats.fail:'BLE ✗';s2.className='bles '+(up?'ok':'bad')},1000);
+ setInterval(()=>{s2.textContent=up?'BLE ✓ '+stats.ok+' / ✗ '+stats.fail+(stats.why?' · '+stats.why:''):'BLE ✗';s2.className='bles '+(up?'ok':'bad')},1000);
  ui.b.onclick=()=>{ui.b.disabled=true;connect()};
  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 });
