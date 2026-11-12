@@ -55,19 +55,35 @@ async function connectGatt(){
  rsp.addEventListener('characteristicvaluechanged',onData);await rsp.startNotifications();
  up=true;setState('BLE מחובר','ok');const w=waiters;waiters=[];w.forEach(f=>f());pump();
 }
+function useDev(d){if(dev===d)return;dev=d;dev.addEventListener('gattserverdisconnected',lost)}
 async function connect(){
  try{
   if(!navigator.bluetooth){setState('הדפדפן לא תומך ב-Web Bluetooth (צריך Chrome באנדרואיד)','bad');return}
-  if(!dev){dev=await navigator.bluetooth.requestDevice({filters:[{services:[SVC]},{name:'CAN-DONGLE'}],optionalServices:[SVC]});
-   dev.addEventListener('gattserverdisconnected',lost)}
+  if(!dev)useDev(await navigator.bluetooth.requestDevice({filters:[{services:[SVC]},{name:'CAN-DONGLE'}],optionalServices:[SVC]}));
   await connectGatt();
  }catch(e){setState('החיבור נכשל: '+(e.message||e),'bad')}
 }
-async function lost(){
- up=false;if(cur)finish(false);setState('החיבור נותק - מתחבר מחדש…','bad');
- for(let i=0;i<20&&!up;i++){await new Promise(r=>setTimeout(r,1500+i*500));try{await connectGatt();return}catch(e){}}
- setState('לא מחובר','bad');
+//keeps trying while the page is open: the dongle sleeps while the car is off and wakes within ~20 s of the car
+let retrying=false;
+async function retry(){
+ if(retrying)return;retrying=true;
+ for(let i=0;!up&&dev;i++){
+  if(document.visibilityState==='visible'){try{await connectGatt();break}catch(e){setState('מחפש את הדונגל… (הרכב דולק?)','bad')}}
+  await new Promise(r=>setTimeout(r,Math.min(2000+i*1000,8000)));
+ }
+ retrying=false;
 }
+function lost(){up=false;if(cur)finish(false);setState('החיבור נותק - מתחבר מחדש…','bad');retry()}
+//a dongle chosen once before: connect without the button (Chrome's getDevices, not on every Android build)
+async function auto(){
+ if(!navigator.bluetooth||!navigator.bluetooth.getDevices)return;
+ try{const ds=await navigator.bluetooth.getDevices();const d=ds.find(x=>x.name==='CAN-DONGLE')||ds[0];
+  if(!d)return;useDev(d);setState('מתחבר אוטומטית…');
+  if(d.watchAdvertisements){d.addEventListener('advertisementreceived',()=>{if(!up)retry()});try{await d.watchAdvertisements()}catch(e){}}
+  retry();
+ }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!up&&dev)retry()});
 //download links (<a href="/scan.txt" download>) and "open" links go through BLE too
 document.addEventListener('click',async e=>{
  const a=e.target.closest&&e.target.closest('a[href^="/"]');if(!a)return;
@@ -97,6 +113,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const s2=bar.querySelector('#blest2');
  setInterval(()=>{s2.textContent=up?'BLE ✓ '+stats.ok+' / ✗ '+stats.fail+(stats.why?' · '+stats.why:''):'BLE ✗';s2.className='bles '+(up?'ok':'bad')},1000);
  ui.b.onclick=()=>{ui.b.disabled=true;connect()};
+ auto();
  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 });
 })();
@@ -150,6 +167,9 @@ textarea{width:100%;background:#0b0d11;color:var(--fg);border:1px solid #2a303c;
   <div class="kpi"><div class="l">קצב זרם</div><div class="v" id="k5">—</div></div>
  </div>
  <section><h2>כל הערכים</h2><table id="vals"></table></section>
+ <section><h2>Wi-Fi</h2>
+ <p class="hint">ה-Wi-Fi כבוי כרגיל - הדף עובד בבלוטות'. הוא דולק 3 דקות אחרי הדלקה או RESET (ונכבה מיד כשמתחברים בבלוטות'), או 5 דקות מהכפתור. כל עוד מישהו מחובר ל-CAN-TEST או שהדף פתוח דרך Wi-Fi, הוא לא נכבה. עדכון קושחה: הדלק Wi-Fi, התחבר לרשת CAN-TEST (סיסמה tpms1234) ופתח http://192.168.4.1</p>
+ <div class="row"><span class="pill" id="wfs">—</span><button id="bwon">הדלק Wi-Fi ל-5 דקות</button><button class="sec" id="bwoff">כבה Wi-Fi</button></div></section>
  <section><h2>חיבור לרשת שלך (למשל נקודה חמה של הטלפון)</h2>
  <p class="hint">הדונגל יתחבר גם לרשת שתבחר, כך שהטלפון נשאר עם אינטרנט. הרשת CAN-TEST ממשיכה לעבוד כגיבוי. אחרי החיבור נכנסים לכתובת שמופיעה כאן, או ל-<b>http://can-dongle.local</b>.</p>
  <div class="row"><span class="pill" id="sta">—</span></div>
@@ -247,6 +267,8 @@ async function tick(){if(busy)return;busy=true;const s=await api('/api/status');
  $('mode').textContent=s.listen?'האזנה בלבד':'מצב רגיל';$('mode').className='pill '+(s.listen?'warn':'ok');$('lo').classList.toggle('hide',!s.listen);
  $('bus').textContent='באס: '+s.bus+' · '+s.rxHz+' frames/s';$('bus').className='pill '+(s.bus=='RUNNING'?'ok':'bad');$('hz').textContent=s.scan>=0?'סורק '+s.scan+'%':'זרם: '+s.hvHz+' Hz';
  $('sta').textContent=!s.staSsid?'לא נבחרה רשת':s.sta?'מחובר ל-'+s.staSsid+' · http://'+s.staIp+' · '+s.rssi+'dBm':'מנסה להתחבר ל-'+s.staSsid;
+ $('wfs').textContent=s.wifi==null?'—':s.wifi<0?'Wi-Fi כבוי':'Wi-Fi דלוק · עוד '+Math.floor(s.wifi/60)+':'+String(s.wifi%60).padStart(2,'0');
+ $('wfs').className='pill '+(s.wifi>=0?'ok':'mut');
  $('sta').className='pill '+(!s.staSsid?'mut':s.sta?'ok':'warn');
  const v=i=>s.v[i].age==null?null:s.v[i].v;
  $('k0').innerHTML=v(0)==null?'—':num(v(0),1)+'<small>A</small>';$('k1').innerHTML=v(2)==null?'—':num(v(2),1)+'<small>kW</small>';
@@ -272,6 +294,8 @@ $('wl').onchange=()=>{if($('wl').value)$('wn').value=$('wl').value};
 $('bwsave').onclick=async()=>{const s=$('wn').value.trim();if(!s)return alert('בחר או כתוב שם רשת');
  await api('/api/wifi?ssid='+encodeURIComponent(s)+'&pass='+encodeURIComponent($('wp').value));$('wp').value='';
  alert('נשמר. הדונגל מתחבר ל-'+s+'. ברגע שיתחבר תופיע כאן הכתובת שלו ברשת הזו.')};
+$('bwon').onclick=async()=>{await api('/api/wifion?min=5');tick()};
+$('bwoff').onclick=async()=>{await api('/api/wifion?min=0');tick()};
 $('bwdel').onclick=async()=>{if(confirm('לשכוח את הרשת?'))await api('/api/wifi?ssid=')};
 $('bscan').onclick=async()=>{const r=await api('/api/scanstart');if(r&&r.err)alert(r.err);scan()};
 let TC=[],TD=0,TDD=null,clockSent=0,tSync=0;
