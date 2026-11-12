@@ -166,6 +166,7 @@ textarea{width:100%;background:#0b0d11;color:var(--fg);border:1px solid #2a303c;
   <div class="kpi"><div class="l">מהירות</div><div class="v" id="k4">—</div></div>
   <div class="kpi"><div class="l">קצב זרם</div><div class="v" id="k5">—</div></div>
  </div>
+ <section id="tyw" class="hide"><h2>צמיגים <span class="pill" id="tys">—</span></h2><div class="kpis" id="tyk"></div></section>
  <section><h2>כל הערכים</h2><table id="vals"></table></section>
  <section><h2>Wi-Fi</h2>
  <p class="hint">ה-Wi-Fi כבוי כרגיל - הדף עובד בבלוטות'. הוא דולק 3 דקות אחרי הדלקה או RESET (ונכבה מיד כשמתחברים בבלוטות'), או 5 דקות מהכפתור. כל עוד מישהו מחובר ל-CAN-TEST או שהדף פתוח דרך Wi-Fi, הוא לא נכבה. עדכון קושחה: הדלק Wi-Fi, התחבר לרשת CAN-TEST (סיסמה tpms1234) ופתח http://192.168.4.1</p>
@@ -267,6 +268,10 @@ async function tick(){if(busy)return;busy=true;const s=await api('/api/status');
  $('mode').textContent=s.listen?'האזנה בלבד':'מצב רגיל';$('mode').className='pill '+(s.listen?'warn':'ok');$('lo').classList.toggle('hide',!s.listen);
  $('bus').textContent='באס: '+s.bus+' · '+s.rxHz+' frames/s';$('bus').className='pill '+(s.bus=='RUNNING'?'ok':'bad');$('hz').textContent=s.scan>=0?'סורק '+s.scan+'%':'זרם: '+s.hvHz+' Hz';
  $('sta').textContent=!s.staSsid?'לא נבחרה רשת':s.sta?'מחובר ל-'+s.staSsid+' · http://'+s.staIp+' · '+s.rssi+'dBm':'מנסה להתחבר ל-'+s.staSsid;
+ if(s.tyres!==undefined){$('tyw').classList.toggle('hide',s.disp==null);//tyres from the SSD1322 display (CarLink)
+  $('tys').textContent=s.disp==null?'':s.tyres?'מהצג · לפני '+s.disp+'s':'הצג לא נשמע '+s.disp+'s';$('tys').className='pill '+(s.tyres&&s.disp<5?'ok':'warn');
+  $('tyk').innerHTML=s.tyres?['קדמי שמאל','קדמי ימין','אחורי שמאל','אחורי ימין'].map((l,i)=>{const[p,t,f,a]=s.tyres[i],al=f&3?'bad':f&4?'warn':'';
+   return`<div class="kpi"><div class="l">${l}${a!=null&&a>600?' (ישן)':''}</div><div class="v ${al}" style="font-size:22px">${p==null?'—':(p/10).toFixed(1)+'<small>psi</small>'}</div><div class="l">${p==null?'':(p/145.04).toFixed(2)+' bar'}${t==null?'':' · '+t+'°C'}</div></div>`}).join(''):''}
  $('wfs').textContent=s.wifi==null?'—':s.wifi<0?'Wi-Fi כבוי':'Wi-Fi דלוק · עוד '+Math.floor(s.wifi/60)+':'+String(s.wifi%60).padStart(2,'0');
  $('wfs').className='pill '+(s.wifi>=0?'ok':'mut');
  $('sta').className='pill '+(!s.staSsid?'mut':s.sta?'ok':'warn');
